@@ -615,10 +615,11 @@
 (defun slack-ws-handle-file-deleted (payload team)
   (let ((file-id (plist-get payload :file_id))
         (room (slack-file-room-obj team)))
-    (with-slots (messages last-read) room
+    (with-slots (messages) room
       (setq messages (cl-remove-if #'(lambda (f)
                                        (string= file-id (oref f id)))
                                    messages)))))
+
 (defun slack-ws-set-ping-timer (team)
   (unless (oref team ping-timer)
     (cl-labels ((ping () (slack-ws-ping team)))
