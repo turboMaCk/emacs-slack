@@ -40,9 +40,29 @@
   ((limit :initarg :limit :initform nil)
    (user-name :initarg :user-name :initform nil)))
 
+(defun slack-ws-set-connect-timeout-timer (team)
+  (slack-ws-cancel-connect-timeout-timer team)
+  (cl-labels
+      ((on-timeout ()
+                   (slack-log (format "websocket open timeout")
+                              team)
+                   (slack-ws-close team t)
+                   (slack-ws-set-reconnect-timer team)))
+    (with-slots ((timer websocket-connect-timeout-timer)
+                 (limit websocket-connect-timeout-sec)) team
+      (setq timer
+            (run-at-time limit nil #'on-timeout)))))
+
+(defun slack-ws-cancel-connect-timeout-timer (team)
+  (with-slots ((timer websocket-connect-timeout-timer)) team
+    (when (timerp timer)
+      (cancel-timer timer)
+      (setq timer nil))))
+
 (defun slack-ws-open (team &optional ws-url)
   (if (and (oref team ws-conn) (websocket-openp (oref team ws-conn)))
       (slack-log "Websocket is Already Open" team)
+    (slack-ws-set-connect-timeout-timer team)
     (cl-labels
         ((on-message (websocket frame)
                      (slack-ws-on-message websocket frame team))
@@ -165,6 +185,7 @@
          ((string= type "pong")
           (slack-ws-handle-pong decoded-payload team))
          ((string= type "hello")
+          (slack-ws-cancel-connect-timeout-timer team)
           (slack-ws-cancel-reconnect-timer team)
           (slack-cancel-notify-adandon-reconnect)
           (slack-ws-set-ping-timer team)
